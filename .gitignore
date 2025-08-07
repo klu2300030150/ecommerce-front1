@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Jenkins and deployment
+.jenkins
+build/
+*.war
+*.ear
+
+# Docker
+.dockerignore
+docker-compose.override.yml

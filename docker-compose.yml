@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  ecommerce-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    container_name: ecommerce-frontend
+    
+networks:
+  default:
+    name: ecommerce-network
