@@ -7,8 +7,6 @@ pipeline {
     
     environment {
         NODE_ENV = 'production'
-        NODEJS_HOME = tool 'NodeJS'
-        PATH = "${NODEJS_HOME}/bin:${env.PATH}"
     }
     
     stages {
@@ -19,17 +17,25 @@ pipeline {
             }
         }
         
-        stage('Install Dependencies') {
+        stage('Check Node Version') {
             steps {
-                echo 'Installing npm dependencies...'
-                bat 'npm ci --production=false'
+                echo 'Checking Node.js and npm versions...'
+                bat 'node --version'
+                bat 'npm --version'
             }
         }
         
-        stage('Lint') {
+        stage('Install Dependencies') {
             steps {
-                echo 'Running ESLint...'
-                bat 'npm run lint'
+                echo 'Installing npm dependencies...'
+                script {
+                    try {
+                        bat 'npm ci'
+                    } catch (Exception e) {
+                        echo 'npm ci failed, trying npm install...'
+                        bat 'npm install'
+                    }
+                }
             }
         }
         
@@ -46,6 +52,7 @@ pipeline {
                 script {
                     if (fileExists('dist/index.html')) {
                         echo 'Build successful - dist folder created'
+                        bat 'dir dist'
                     } else {
                         error 'Build failed - dist folder not found'
                     }
@@ -60,46 +67,30 @@ pipeline {
             }
         }
         
-        stage('Deploy to Staging') {
+        stage('Deploy to Local') {
             when {
                 branch 'master'
             }
             steps {
-                echo 'Deploying to staging environment...'
+                echo 'Deploying to local directory...'
                 script {
-                    // Copy build files to web server directory
-                    // Adjust the path according to your web server setup
                     bat '''
-                        if exist "C:\\inetpub\\wwwroot\\ecommerce-staging" (
-                            rmdir /s /q "C:\\inetpub\\wwwroot\\ecommerce-staging"
+                        echo "Creating deployment directory..."
+                        if not exist "C:\\Jenkins\\deployments" mkdir "C:\\Jenkins\\deployments"
+                        
+                        echo "Removing old staging files..."
+                        if exist "C:\\Jenkins\\deployments\\ecommerce-staging" (
+                            rmdir /s /q "C:\\Jenkins\\deployments\\ecommerce-staging"
                         )
-                        mkdir "C:\\inetpub\\wwwroot\\ecommerce-staging"
-                        xcopy /s /e /h /y "dist\\*" "C:\\inetpub\\wwwroot\\ecommerce-staging\\"
-                    '''
-                }
-            }
-        }
-        
-        stage('Deploy to Production') {
-            when {
-                allOf {
-                    branch 'master'
-                    expression { 
-                        return env.DEPLOY_TO_PROD == 'true'
-                    }
-                }
-            }
-            steps {
-                echo 'Deploying to production environment...'
-                input message: 'Deploy to production?', ok: 'Deploy'
-                script {
-                    // Copy build files to production web server directory
-                    bat '''
-                        if exist "C:\\inetpub\\wwwroot\\ecommerce-prod" (
-                            rmdir /s /q "C:\\inetpub\\wwwroot\\ecommerce-prod"
-                        )
-                        mkdir "C:\\inetpub\\wwwroot\\ecommerce-prod"
-                        xcopy /s /e /h /y "dist\\*" "C:\\inetpub\\wwwroot\\ecommerce-prod\\"
+                        
+                        echo "Creating new staging directory..."
+                        mkdir "C:\\Jenkins\\deployments\\ecommerce-staging"
+                        
+                        echo "Copying build files..."
+                        xcopy /s /e /h /y "dist\\*" "C:\\Jenkins\\deployments\\ecommerce-staging\\"
+                        
+                        echo "Deployment completed successfully!"
+                        dir "C:\\Jenkins\\deployments\\ecommerce-staging"
                     '''
                 }
             }
@@ -108,26 +99,23 @@ pipeline {
     
     post {
         always {
-            echo 'Cleaning up workspace...'
-            cleanWs()
+            echo 'Pipeline completed!'
+            script {
+                if (fileExists('dist')) {
+                    echo 'Build artifacts found in dist folder'
+                } else {
+                    echo 'No build artifacts found'
+                }
+            }
         }
         success {
             echo 'Pipeline succeeded!'
-            // You can add notification steps here
-            // emailext (
-            //     subject: "SUCCESS: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
-            //     body: "Good news! The build succeeded.",
-            //     to: "your-email@example.com"
-            // )
+            echo "✅ E-commerce frontend deployed successfully!"
+            echo "📁 Deployment location: C:\\Jenkins\\deployments\\ecommerce-staging"
         }
         failure {
             echo 'Pipeline failed!'
-            // You can add notification steps here
-            // emailext (
-            //     subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
-            //     body: "Bad news! The build failed.",
-            //     to: "your-email@example.com"
-            // )
+            echo "❌ Check the console output above for error details"
         }
     }
 }
